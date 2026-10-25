@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#102c3c">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>Visão geral · Fluxo</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=9">
+  <script defer src="https://cdn.pluggy.ai/pluggy-connect/v2.7.0/pluggy-connect.js"></script>
+  <script defer src="{{ url_for('static', filename='app.js') }}?v=9"></script>
+</head>
+<body class="app-page">
+  <div class="mobile-bar">
+    <a class="brand" href="#" data-nav="overview"><span class="brand-mark">f</span><span>fluxo<span class="brand-dot">.</span></span></a>
+    <button class="icon-button mobile-menu" id="mobileMenu" aria-label="Abrir menu" aria-expanded="false"><span></span><span></span></button>
+  </div>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand side-brand" href="#" data-nav="overview"><span class="brand-mark">f</span><span>fluxo<span class="brand-dot">.</span></span></a>
+      <div class="side-label">SEU DINHEIRO</div>
+      <nav class="main-nav" aria-label="Navegação principal">
+        <button class="nav-link active" data-nav="overview"><span class="nav-icon">⌂</span> Visão geral</button>
+        <button class="nav-link" data-nav="forecast"><span class="nav-icon">◷</span> Próximos 30 dias</button>
+        <button class="nav-link" data-nav="transactions"><span class="nav-icon">↔</span> Movimentações</button>
+        <button class="nav-link" data-nav="cards"><span class="nav-icon">▤</span> Contas e cartões</button>
+        <button class="nav-link" data-nav="investments"><span class="nav-icon">◉</span> Investimentos</button>
+      </nav>
+      <div class="side-label side-label-spaced">CONECTAR</div>
+      <nav class="main-nav" aria-label="Conexões e relatórios">
+        <button class="nav-link" data-nav="connections"><span class="nav-icon">⟳</span> Bancos e WhatsApp</button>
+        <button class="nav-link" data-nav="settings"><span class="nav-icon">⚙</span> Configurações</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="privacy-chip"><span class="privacy-dot"></span><span><b>Seu espaço privado</b><small>Dados protegidos neste painel</small></span></div>
+        <form action="/logout" method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="logout-link" type="submit">Sair da conta <span aria-hidden="true">↗</span></button>
+        </form>
+        <span class="side-version">FLUXO · FINANÇAS PESSOAIS</span>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow" id="pageEyebrow">SEU RESUMO FINANCEIRO</p>
+          <h1 id="pageTitle">Visão geral</h1>
+          <p class="page-subtitle" id="pageSubtitle">Acompanhe o que entra, sai e fica com você.</p>
+        </div>
+        <div class="header-actions">
+          <span class="sync-status" id="syncStatus"><span class="sync-dot"></span><span>Carregando seus dados</span></span>
+          <button class="button button-soft" id="refreshButton"><span aria-hidden="true">⟳</span> Atualizar</button>
+        </div>
+      </header>
+
+      <section class="page-section active" id="section-overview" aria-labelledby="pageTitle">
+        <div class="welcome-band">
+          <div class="welcome-copy">
+            <span class="welcome-icon" aria-hidden="true">✳</span>
+            <div><p class="welcome-label">SEU DINHEIRO, COM MAIS CLAREZA</p><h2>Um passo de cada vez.</h2><p>Veja seu mês e entenda para onde o dinheiro está indo.</p></div>
+          </div>
+          <div class="welcome-date"><span id="todayLabel">HOJE</span><b id="todayDate">—</b></div>
+          <div class="welcome-decoration" aria-hidden="true">✳</div>
+        </div>
+        <div class="stat-grid">
+          <article class="stat-card">
+            <div class="stat-heading"><span>Entradas no mês</span><span class="stat-icon icon-green">↘</span></div>
+            <div class="stat-value" id="statIncome">R$ 0,00</div><div class="stat-foot"><span class="foot-dot green"></span> Entradas confirmadas no mês</div>
+          </article>
+          <article class="stat-card">
+            <div class="stat-heading"><span>Despesas no mês</span><span class="stat-icon icon-coral">↗</span></div>
+            <div class="stat-value" id="statExpenses">R$ 0,00</div><div class="stat-foot"><span class="foot-dot coral"></span> Despesas confirmadas no mês</div>
+          </article>
+          <article class="stat-card stat-featured">
+            <div class="stat-heading"><span>Saldo do mês</span><span class="stat-icon icon-blue">∑</span></div>
+            <div class="stat-value" id="statNet">R$ 0,00</div><div class="stat-foot"><span class="foot-dot blue"></span> Entradas menos saídas e aportes confirmados</div>
+          </article>
+          <article class="stat-card">
+            <div class="stat-heading"><span>Investido</span><span class="stat-icon icon-lilac">◉</span></div>
+            <div class="stat-value" id="statInvestments">R$ 0,00</div><div class="stat-foot"><span class="foot-dot lilac"></span> Carteira automática e manual</div>
+          </article>
+        </div>
+
+        <div class="content-grid overview-grid">
+          <article class="panel chart-panel">
+            <div class="panel-heading">
+              <div><p class="eyebrow">MOVIMENTO DO DINHEIRO</p><h2>Fluxo de caixa</h2><p class="panel-subtitle">Últimos 30 dias · valores em reais</p></div>
+              <span class="chart-period">30 dias <span aria-hidden="true">⌄</span></span>
+            </div>
+            <div id="cashflowChart" class="chart" role="group" aria-label="Gráfico interativo de entradas, despesas e aportes nos últimos 30 dias">
+              <div class="chart-placeholder"><span class="loader"></span> Preparando o gráfico</div>
+            </div>
+            <div class="chart-legend" aria-label="Exibir ou ocultar séries do gráfico"><button type="button" class="chart-legend-toggle" data-series-toggle="income" aria-pressed="true"><i class="legend-dot legend-income"></i>Entradas</button><button type="button" class="chart-legend-toggle" data-series-toggle="expense" aria-pressed="true"><i class="legend-dot legend-expense"></i>Despesas</button><button type="button" class="chart-legend-toggle" data-series-toggle="investment" aria-pressed="true"><i class="legend-dot legend-invest"></i>Aportes</button></div>
+          </article>
+          <article class="panel categories-panel">
+            <div class="panel-heading"><div><p class="eyebrow">SEU MÊS</p><h2>Onde você gastou</h2></div><button class="text-button" data-nav="transactions">Ver tudo <span aria-hidden="true">→</span></button></div>
+            <div id="categoryList" class="category-list"><div class="empty-state compact">As categorias aparecem aqui depois da primeira sincronização.</div></div>
+          </article>
+        </div>
+
+        <div class="content-grid lower-grid">
+          <article class="panel recent-panel">
+            <div class="panel-heading"><div><p class="eyebrow">ACOMPANHAMENTO</p><h2>Movimentações recentes</h2></div><button class="text-button" data-nav="transactions">Abrir extrato <span aria-hidden="true">→</span></button></div>
+            <div class="table-wrap"><table class="data-table"><thead><tr><th>Movimentação</th><th>Categoria</th><th>Data e hora</th><th class="align-right">Valor</th></tr></thead><tbody id="recentRows"><tr><td colspan="4" class="empty-cell">Conecte sua conta para começar.</td></tr></tbody></table></div>
+          </article>
+          <article class="panel card-summary-panel">
+            <div class="panel-heading"><div><p class="eyebrow">CRÉDITO</p><h2>Seus cartões</h2></div><button class="text-button" data-nav="cards">Detalhes <span aria-hidden="true">→</span></button></div>
+            <div id="cardMiniList" class="card-mini-list"><div class="empty-state compact">Seus cartões aparecem depois da conexão.</div></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="page-section" id="section-forecast" aria-labelledby="pageTitle">
+        <div class="forecast-hero">
+          <div><p class="eyebrow">PLANEJAMENTO FINANCEIRO</p><h2 id="forecastRange">Próximos 30 dias</h2><p>Estimativa baseada no seu histórico confirmado. Você pode ajustar cada valor e classificação.</p></div>
+          <button class="button button-soft" id="refreshForecastButton" type="button">⟳ Atualizar estimativa</button>
+        </div>
+        <div class="forecast-stat-grid">
+          <article class="stat-card stat-featured"><div class="stat-heading"><span>Total previsto em 30 dias</span><span class="stat-icon icon-blue">∑</span></div><div class="stat-value" id="forecastTotal">R$ 0,00</div><div class="stat-foot"><span class="foot-dot blue"></span> Soma dos custos fixos e variáveis</div></article>
+          <article class="stat-card"><div class="stat-heading"><span>Custos fixos</span><span class="stat-icon icon-green">↻</span></div><div class="stat-value" id="forecastFixedTotal">R$ 0,00</div><div class="stat-foot"><span class="foot-dot green"></span> Recorrentes e itens classificados como fixos</div></article>
+          <article class="stat-card"><div class="stat-heading"><span>Custos variáveis</span><span class="stat-icon icon-coral">↗</span></div><div class="stat-value" id="forecastVariableTotal">R$ 0,00</div><div class="stat-foot"><span class="foot-dot coral"></span> Gastos estimados pelo uso recente</div></article>
+          <article class="stat-card"><div class="stat-heading"><span>Subtotal dos cartões</span><span class="stat-icon icon-lilac">▤</span></div><div class="stat-value" id="forecastCardsTotal">R$ 0,00</div><div class="stat-foot"><span class="foot-dot"></span> Já incluído no total previsto</div></article>
+        </div>
+        <div class="forecast-layout-grid">
+          <article class="panel forecast-card-panel">
+            <div class="panel-heading"><div><p class="eyebrow">CRÉDITO</p><h2>Estimativa por cartão</h2><p class="panel-subtitle">Compras fixas e variáveis projetadas em cada cartão.</p></div></div>
+            <div id="forecastCardList" class="forecast-card-list"><div class="empty-state">Carregue a previsão para ver seus cartões.</div></div>
+            <p class="forecast-note">O pagamento da fatura não é somado de novo: a estimativa considera as compras do cartão.</p>
+          </article>
+          <article class="panel forecast-method-panel">
+            <div class="panel-heading"><div><p class="eyebrow">COMO CALCULAMOS</p><h2>Base do histórico</h2></div></div>
+            <p id="forecastHistoryNote" class="forecast-method-copy">A previsão será calculada a partir das despesas confirmadas, sem lançamentos pendentes ou datas futuras.</p>
+            <div class="forecast-legend"><span><i class="forecast-dot fixed"></i><b>Fixo</b> costuma se repetir todos os meses, como aluguel ou contas.</span><span><i class="forecast-dot variable"></i><b>Variável</b> muda conforme o consumo ou uso.</span></div>
+          </article>
+        </div>
+        <article class="panel forecast-items-panel">
+          <div class="panel-heading"><div><p class="eyebrow">DETALHAMENTO</p><h2>Custos previstos</h2><p class="panel-subtitle">Altere descrição, classificação, valor ou desative um item; as mudanças ficam salvas.</p></div><span class="result-count" id="forecastItemCount">0 itens</span></div>
+          <div class="forecast-group"><div class="forecast-group-heading"><div><h3>Custos fixos</h3><p>Despesas que se repetem, com valor igual ou aproximado.</p></div><span id="forecastFixedCount" class="result-count">0 itens</span></div><div id="forecastFixedItems" class="forecast-item-list"><div class="empty-state compact">Nenhum custo fixo identificado.</div></div></div>
+          <div class="forecast-group"><div class="forecast-group-heading"><div><h3>Custos variáveis</h3><p>Estimativas por categoria e compras variáveis de cada cartão.</p></div><span id="forecastVariableCount" class="result-count">0 itens</span></div><div id="forecastVariableItems" class="forecast-item-list"><div class="empty-state compact">Nenhum custo variável identificado.</div></div></div>
+        </article>
+        <article class="panel forecast-add-panel">
+          <div class="panel-heading"><div><p class="eyebrow">AJUSTE MANUAL</p><h2>Adicionar outro custo</h2><p class="panel-subtitle">Inclua contas, parcelas ou previsões que ainda não aparecem no histórico.</p></div></div>
+          <form id="forecastItemForm" class="forecast-add-form">
+            <label class="field">Descrição<input name="label" required maxlength="120" placeholder="Ex.: aluguel"></label>
+            <label class="field">Valor previsto para 30 dias<input name="amount" type="number" min="0" max="10000000000" step="0.01" inputmode="decimal" required placeholder="0,00"></label>
+            <label class="field">Classificação<select name="cost_type"><option value="fixed">Fixo · recorrente</option><option value="variable">Variável · por uso</option></select></label>
+            <label class="field">Vincular a um cartão<select name="card_account_id" id="forecastCardSelector"><option value="">Sem vínculo com cartão</option></select></label>
+            <div class="forecast-add-action"><button class="button button-primary" type="submit">＋ Adicionar à estimativa</button></div>
+          </form>
+        </article>
+      </section>
+
+      <section class="page-section" id="section-transactions" aria-labelledby="pageTitle">
+        <div class="toolbar-row">
+          <div class="search-control"><span aria-hidden="true">⌕</span><input id="transactionSearch" type="search" placeholder="Buscar descrição ou categoria" aria-label="Buscar movimentações"></div>
+          <div class="date-filter-group" role="group" aria-label="Filtrar movimentações por período">
+            <label>De <input class="date-filter" id="transactionStartDate" type="date" aria-label="Data inicial"></label>
+            <span aria-hidden="true">até</span>
+            <input class="date-filter" id="transactionEndDate" type="date" aria-label="Data final">
+          </div>
+          <select class="select-control" id="flowFilter" aria-label="Filtrar por tipo"><option value="all">Todos os movimentos</option><option value="income">Entradas</option><option value="expense">Despesas</option><option value="investment">Aportes</option><option value="transfer">Transferências e faturas</option></select>
+        </div>
+        <div class="period-summary" aria-live="polite">
+          <div class="period-summary-heading"><p class="eyebrow">RESUMO DO PERÍODO</p><span id="transactionPeriodLabel">Todo o histórico</span></div>
+          <div class="period-total-grid">
+            <div class="period-total"><span>Entradas confirmadas</span><strong id="periodIncome">R$ 0,00</strong></div>
+            <div class="period-total"><span>Despesas confirmadas</span><strong id="periodExpenses">R$ 0,00</strong></div>
+            <div class="period-total"><span>Saldo após despesas e aportes</span><strong id="periodNet">R$ 0,00</strong></div>
+          </div>
+          <p class="period-note" id="transactionPeriodNote">Os totais consideram o período selecionado; lançamentos pendentes continuam no extrato, mas ficam fora das somas.</p>
+        </div>
+        <article class="panel table-panel">
+          <div class="panel-heading"><div><p class="eyebrow">EXTRATO CONSOLIDADO</p><h2>Movimentações</h2><p class="panel-subtitle">Revise as categorias sugeridas e ajuste quando precisar.</p></div><span class="result-count" id="transactionCount">0 registros</span></div>
+          <div class="table-wrap"><table class="data-table ledger-table"><thead><tr><th>Descrição</th><th>Conta</th><th>Categoria</th><th>Data e hora</th><th class="align-right">Valor</th></tr></thead><tbody id="transactionRows"><tr><td colspan="5" class="empty-cell">Ainda não há movimentações. Conecte seus bancos para importar.</td></tr></tbody></table></div>
+        </article>
+      </section>
+
+      <section class="page-section" id="section-cards" aria-labelledby="pageTitle">
+        <div class="section-intro-card"><span class="intro-symbol intro-blue">▤</span><div><h2>Contas e cartões</h2><p>Contas bancárias, limite disponível e faturas em um só lugar.</p></div><button class="button button-primary" data-nav="connections">Conectar uma instituição <span aria-hidden="true">→</span></button></div>
+        <div class="cards-grid" id="cardsGrid"></div>
+        <article class="panel accounts-panel"><div class="panel-heading"><div><p class="eyebrow">SALDOS</p><h2>Contas conectadas</h2></div></div><div id="accountsList" class="account-list"></div></article>
+      </section>
+
+      <section class="page-section" id="section-investments" aria-labelledby="pageTitle">
+        <div class="investment-hero">
+          <div><p class="eyebrow">PATRIMÔNIO INVESTIDO</p><h2 id="investmentTotal">R$ 0,00</h2><p>Posições recebidas do Pluggy e aplicações manuais, prontas para a análise semanal.</p></div>
+          <div class="investment-spark" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+          <span class="investment-orbit" aria-hidden="true">&#9673;</span>
+        </div>
+        <div class="investment-toolbar">
+          <p>Os investimentos conectados são atualizados pelo Open Finance. Use o cadastro manual quando uma aplicação não aparecer.</p>
+          <div class="investment-actions">
+            <button class="button button-soft" id="syncInvestmentsButton" type="button">&#8635; Atualizar pelo Pluggy</button>
+            <button class="button button-primary" id="toggleManualInvestmentButton" type="button" aria-expanded="false" aria-controls="manualInvestmentPanel">&#43; Adicionar manualmente</button>
+          </div>
+        </div>
+        <article class="panel manual-investment-panel" id="manualInvestmentPanel" hidden>
+          <div class="panel-heading"><div><p class="eyebrow">CADASTRO MANUAL</p><h2>Novo investimento</h2></div></div>
+          <form id="investmentForm" class="form-grid">
+            <label class="field full-field">Nome do investimento<input name="name" placeholder="Ex.: CDB com liquidez diária" required maxlength="120"></label>
+            <label class="field">Tipo<select name="kind" required><option value="">Selecione</option><option>Renda fixa</option><option>Tesouro Direto</option><option>Fundos</option><option>Ações</option><option>ETF</option><option>Criptomoedas</option><option>Previdência</option><option>Outro</option></select></label>
+            <label class="field">Valor atual<input name="amount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0,00" required></label>
+            <label class="field">Instituição<input name="institution" placeholder="Opcional"></label>
+            <label class="field">Data da atualização<input name="updated_on" type="date"></label>
+            <label class="field full-field">Observações<textarea name="notes" rows="2" placeholder="Opcional"></textarea></label>
+            <div class="full-field"><button class="button button-primary" type="submit">Salvar investimento manual</button></div>
+          </form>
+        </article>
+        <article class="panel portfolio-panel">
+          <div class="panel-heading"><div><p class="eyebrow">VISÃO DA CARTEIRA</p><h2>Seus investimentos</h2></div><span class="result-count" id="investmentCount">0 aplicações</span></div>
+          <div id="investmentList" class="investment-list"></div>
+        </article>
+        <div class="inline-note"><span class="note-icon">i</span><p>Valores do Pluggy são sincronizados automaticamente com os bancos conectados. Valores manuais são atualizados por você e entram junto com os automáticos na análise financeira semanal.</p></div>
+      </section>
+
+      <section class="page-section" id="section-connections" aria-labelledby="pageTitle">
+        <div class="section-intro-card"><span class="intro-symbol intro-green">⟳</span><div><h2>Conexões e relatórios</h2><p>Conecte suas instituições com autorização Open Finance e configure os envios.</p></div><button class="button button-soft" id="syncNowButton">⟳ Sincronizar agora</button></div>
+        <div class="content-grid connection-grid">
+          <article class="panel connection-panel">
+            <div class="panel-heading"><div><p class="eyebrow">OPEN FINANCE</p><h2>Conecte seus bancos</h2><p class="panel-subtitle">A autorização acontece no fluxo da instituição financeira.</p></div><span class="connection-badge" id="pluggyBadge">Não configurado</span></div>
+            <div class="bank-tiles"><div class="bank-tile"><span class="bank-logo nubank-logo">nu</span><span><b>Nubank</b><small>Conta e cartão</small></span></div><div class="bank-tile"><span class="bank-logo inter-logo">in</span><span><b>Inter</b><small>Conta e cartão</small></span></div></div>
+            <button class="button button-primary button-wide" id="connectBankButton"><span aria-hidden="true">＋</span> Conectar banco ou cartão</button>
+            <p class="fine-print">Você aprova o compartilhamento dentro do fluxo oficial da instituição. O painel não solicita sua senha bancária.</p>
+            <div class="connected-items" id="connectedItems"></div>
+          </article>
+          <article class="panel whats-panel">
+            <div class="panel-heading"><div><p class="eyebrow">WHATSAPP · WPPCONNECT</p><h2>Seu resumo no WhatsApp</h2><p class="panel-subtitle">Leia o QR Code para conectar sua sessão.</p></div><span class="connection-badge badge-muted" id="whatsappBadge">Desconectado</span></div>
+            <div class="qr-wrap"><div class="qr-frame" id="qrFrame"><div class="qr-placeholder"><span class="qr-glyph">▦</span><span>O QR Code aparecerá aqui</span></div><img id="whatsappQr" alt="QR Code para conectar o WhatsApp" hidden></div><p class="qr-caption" id="qrCaption">Abra o WhatsApp no celular e leia este código em “Aparelhos conectados”.</p></div>
+            <div class="connection-actions"><button class="button button-primary" id="connectWhatsappButton">Gerar QR Code</button><button class="button button-soft" id="refreshQrButton">Atualizar status</button></div>
+            <div class="report-actions"><button class="button button-soft" id="sendDailyButton">Enviar resumo de hoje</button><button class="button button-soft" id="sendWeeklyButton">Enviar análise semanal</button></div>
+            <div id="reportHistory" class="report-history"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="page-section" id="section-settings" aria-labelledby="pageTitle">
+        <div class="settings-stack">
+          <article class="panel settings-panel">
+            <div class="panel-heading"><div><p class="eyebrow">OPEN FINANCE · PLUGGY</p><h2>Credenciais bancárias</h2><p class="panel-subtitle">Chaves do agregador guardadas criptografadas no servidor.</p></div><span class="secure-label"><span class="privacy-dot"></span> Criptografadas</span></div>
+            <form id="settingsForm" class="form-grid">
+              <label class="field">Client ID<input name="pluggy_client_id" autocomplete="off" placeholder="Cole o Client ID da Pluggy"></label>
+              <label class="field">Client Secret<input name="pluggy_client_secret" type="password" autocomplete="new-password" placeholder="Cole o Client Secret da Pluggy"></label>
+              <label class="field">Ambiente do widget<select name="pluggy_sandbox"><option value="false">Instituições reais</option><option value="true">Incluir sandbox de demonstração</option></select></label>
+              <div class="field field-note"><span>As credenciais ficam no backend. O navegador recebe apenas tokens de conexão temporários.</span></div>
+              <div class="full-field form-actions"><label class="check-row"><input type="checkbox" name="remove_pluggy"><span>Remover credenciais salvas</span></label><span class="spacer"></span><button class="button button-primary" type="submit">Salvar configurações</button></div>
+            </form>
+          </article>
+          <article class="panel settings-panel">
+            <div class="panel-heading"><div><p class="eyebrow">WPPCONNECT</p><h2>WhatsApp e frequência</h2><p class="panel-subtitle">Defina a sessão, o número de destino e os horários locais.</p></div></div>
+            <form id="whatsappSettingsForm" class="form-grid">
+              <label class="field full-field">Endereço do servidor WPPConnect<input name="whatsapp_base_url" placeholder="http://wppconnect:21465" required></label>
+              <label class="field">Nome da sessão<input name="whatsapp_session" placeholder="financas" required></label>
+              <label class="field">Secret Key do servidor<input name="whatsapp_secret" type="password" autocomplete="new-password" placeholder="Não armazenada no navegador"></label>
+              <label class="field full-field">WhatsApp de destino<input name="whatsapp_phone" inputmode="tel" placeholder="55 + DDD + número" aria-describedby="phoneHelp"><small id="phoneHelp">Inclua o código do país e o DDD, somente números para o envio.</small></label>
+              <label class="field">Frequência<select name="report_frequency"><option value="off">Desativado</option><option value="daily">Diário</option><option value="weekly">Semanal</option><option value="daily_weekly">Diário e semanal</option></select></label>
+              <label class="field">Horário diário<input name="daily_time" type="time"></label>
+              <label class="field">Dia do resumo semanal<select name="weekly_day"><option value="0">Segunda-feira</option><option value="1">Terça-feira</option><option value="2">Quarta-feira</option><option value="3">Quinta-feira</option><option value="4">Sexta-feira</option><option value="5">Sábado</option><option value="6">Domingo</option></select></label>
+              <label class="field">Horário semanal<input name="weekly_time" type="time"></label>
+              <label class="field">Fuso horário<input name="timezone" placeholder="America/Sao_Paulo" required></label>
+              <label class="field">Sincronização bancária<select name="sync_interval_hours"><option value="4">A cada 4 horas</option><option value="8">A cada 8 horas</option><option value="12">A cada 12 horas</option><option value="24">Uma vez por dia</option><option value="0">Desativada</option></select></label>
+              <div class="full-field form-actions"><button class="button button-primary" type="submit">Salvar WhatsApp e horários</button></div>
+            </form>
+          </article>
+          <article class="panel settings-panel">
+            <div class="panel-heading"><div><p class="eyebrow">ANÁLISE SEMANAL</p><h2>Codex CLI</h2><p class="panel-subtitle">O relatório semanal envia seu histórico financeiro e a carteira manual para o Codex CLI.</p></div><span class="ai-pill">GPT-6 Luna · Max</span></div>
+            <form id="codexSettingsForm" class="form-grid">
+              <label class="field full-field">Caminho do Codex CLI<input name="codex_path" placeholder="codex" required><small>No servidor, o CLI precisa estar instalado e autenticado.</small></label>
+              <label class="field">Modelo<input name="codex_model" value="gpt-6-luna" required></label>
+              <label class="field">Esforço de raciocínio<select name="codex_effort"><option value="max">Máximo (Max)</option><option value="xhigh">Muito alto (xhigh)</option><option value="high">Alto (high)</option><option value="medium">Médio (medium)</option><option value="low">Baixo (low)</option></select></label>
+              <div class="full-field callout"><span class="callout-icon">i</span><p>Para análise automática, mantenha o servidor ativo e autentique o Codex CLI nesse servidor uma única vez. A execução usa sandbox somente leitura.</p></div>
+              <div class="full-field form-actions"><button class="button button-primary" type="submit">Salvar análise semanal</button><button class="button button-soft" id="runWeeklyNowButton" type="button">Analisar e enviar agora</button></div>
+            </form>
+          </article>
+          <div class="settings-footer">O histórico financeiro e as credenciais são armazenados em <code>runtime</code> dentro da pasta do projeto.</div>
+        </div>
+      </section>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+      <footer class="page-footer"><span>Fluxo · Seu controle financeiro pessoal</span><span>Dados sincronizados: <b id="lastSyncFooter">—</b></span></footer>
+    </main>
+  </div>
+</body>
+</html>

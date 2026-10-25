@@ -1,0 +1,49 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      FINANCE_DATA_DIR: /app/runtime
+      APP_ENV: production
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8000
+      COOKIE_SECURE: "true"
+      CODEX_HOME: /app/runtime/codex-home
+      WPP_BASE_URL: http://wppconnect:21465
+      TZ: America/Sao_Paulo
+    volumes:
+      - ./runtime:/app/runtime
+    expose:
+      - "8000"
+    depends_on:
+      - wppconnect
+
+  wppconnect:
+    image: wppconnect/wppconnect-server:${WPP_SERVER_TAG:-2.10.27}
+    restart: unless-stopped
+    environment:
+      SECRET_KEY: ${WPP_SECRET_KEY:?Defina WPP_SECRET_KEY no arquivo .env}
+      PORT: 21465
+      MANAGER_ENABLED: "false"
+      TZ: America/Sao_Paulo
+    volumes:
+      - ./runtime/wpp-tokens:/usr/src/wpp-server/tokens
+      - ./runtime/wpp-user-data:/usr/src/wpp-server/userDataDir
+    expose:
+      - "21465"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?Defina APP_DOMAIN no arquivo .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./runtime/caddy-data:/data
+      - ./runtime/caddy-config:/config
+    depends_on:
+      - app

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#102c3c">
+  <title>{{ 'Criar acesso' if mode == 'setup' else 'Entrar' }} · Fluxo</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body class="auth-page">
+  <main class="auth-shell">
+    <section class="auth-card" aria-labelledby="auth-title">
+      <a class="brand brand-auth" href="/" aria-label="Fluxo, início">
+        <span class="brand-mark">f</span><span>fluxo<span class="brand-dot">.</span></span>
+      </a>
+      {% if mode == 'setup' %}
+        <p class="eyebrow">SEU ESPAÇO FINANCEIRO</p>
+        <h1 id="auth-title">Vamos proteger seu acesso.</h1>
+        <p class="muted">Crie uma senha forte para começar. Ela protege seu painel e suas integrações.</p>
+        {% if error %}<div class="notice notice-error" role="alert">{{ error }}</div>{% endif %}
+        <form method="post" class="stack-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label for="password">Senha <span class="hint">mínimo de 12 caracteres</span></label>
+          <input id="password" name="password" type="password" autocomplete="new-password" minlength="12" required>
+          <label for="confirmation">Repita a senha</label>
+          <input id="confirmation" name="confirmation" type="password" autocomplete="new-password" minlength="12" required>
+          <button class="button button-primary button-wide" type="submit">Criar acesso seguro <span aria-hidden="true">→</span></button>
+        </form>
+      {% else %}
+        <p class="eyebrow">BEM-VINDO DE VOLTA</p>
+        <h1 id="auth-title">Suas finanças, em ordem.</h1>
+        <p class="muted">Entre com a senha que você criou para este painel.</p>
+        {% if error %}<div class="notice notice-error" role="alert">{{ error }}</div>{% endif %}
+        <form method="post" class="stack-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label for="password">Senha</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+          <button class="button button-primary button-wide" type="submit">Entrar <span aria-hidden="true">→</span></button>
+        </form>
+      {% endif %}
+      <div class="auth-foot"><span class="lock-icon" aria-hidden="true">◈</span> Seus dados ficam protegidos por senha e criptografia local.</div>
+    </section>
+    <aside class="auth-aside" aria-hidden="true">
+      <div class="aside-orb orb-one"></div><div class="aside-orb orb-two"></div>
+      <div class="aside-content">
+        <span class="aside-kicker">CLAREZA PARA DECIDIR</span>
+        <h2>Um olhar tranquilo<br>sobre o seu dinheiro.</h2>
+        <div class="aside-line"></div>
+        <p>Entradas, gastos, cartões e investimentos. Tudo em um só lugar.</p>
+        <div class="mini-chart"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><span></span></div>
+      </div>
+      <span class="aside-caption">SEU CONTROLE. SEU RITMO.</span>
+    </aside>
+  </main>
+</body>
+</html>
