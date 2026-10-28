@@ -35,10 +35,12 @@ FERNET_KEY_PATH = DATA_DIR / ".encryption-key"
 SESSION_COOKIE = "controle_session"
 CSRF_COOKIE = "controle_csrf"
 SESSION_DAYS = 14
+CARD_PAYMENT_CATEGORY = "Pagamento de cartão"
+CARD_REFUND_CATEGORY = "Estorno no cartão"
 CATEGORIES = [
     "Alimentação", "Moradia", "Transporte", "Saúde", "Educação", "Assinaturas",
     "Compras", "Lazer", "Taxas e juros", "Salário", "Outras entradas",
-    "Investimentos", "Pagamento de cartão", "Transferência interna", "Outros",
+    "Investimentos", CARD_PAYMENT_CATEGORY, "Transferência interna", "Outros", CARD_REFUND_CATEGORY,
 ]
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
@@ -207,6 +209,33 @@ def init_db() -> None:
                 db.execute(f"ALTER TABLE investments ADD COLUMN {column} {declaration}")
         db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_investments_external_id "
                    "ON investments(external_id) WHERE external_id IS NOT NULL")
+        migration_key = "migration_card_cashflow_v1"
+        if not db.execute("SELECT 1 FROM settings WHERE key=?", (migration_key,)).fetchone():
+            transactions = db.execute(
+                "SELECT transaction_id,description,category,direction,account_type,category_source,flow FROM transactions"
+            ).fetchall()
+            payment_key = normalize(CARD_PAYMENT_CATEGORY)
+            refund_key = normalize(CARD_REFUND_CATEGORY)
+            for tx in transactions:
+                manual = tx["category_source"] == "manual"
+                category_key = normalize(tx["category"])
+                if manual and category_key not in (payment_key, refund_key):
+                    continue
+                if manual:
+                    category = tx["category"]
+                    flow = category_flow(category, tx["direction"], tx["account_type"])
+                else:
+                    category, flow = classify_transaction(
+                        tx["description"], tx["category"], tx["direction"], tx["account_type"]
+                    )
+                    if flow not in ("card_payment", "card_refund") and not (
+                            category == CARD_PAYMENT_CATEGORY and
+                            _is_card_payment(tx["description"], tx["category"])):
+                        continue
+                if category != tx["category"] or flow != tx["flow"]:
+                    db.execute("UPDATE transactions SET category=?,flow=? WHERE transaction_id=?",
+                               (category, flow, tx["transaction_id"]))
+            db.execute("INSERT INTO settings(key,value) VALUES(?,?)", (migration_key, iso_now()))
 
 
 def now_utc() -> datetime:
@@ -338,24 +367,113 @@ def normalize(value: str) -> str:
     return re.sub(r"\s+", " ", text).strip().lower()
 
 
-def category_flow(category: str, direction: str) -> str:
-    if category in ("Salário", "Outras entradas"):
-        return "income"
-    if category in ("Pagamento de cartão", "Transferência interna"):
+def category_flow(category: str, direction: str, account_type: str = "BANK") -> str:
+    category_key = normalize(category)
+    direction = str(direction or "").upper()
+    account_type = str(account_type or "BANK").upper()
+    if category_key == normalize(CARD_PAYMENT_CATEGORY):
+        if account_type == "CREDIT":
+            return "transfer"
+        return "card_payment" if direction == "DEBIT" else "income"
+    if category_key == normalize(CARD_REFUND_CATEGORY):
+        if account_type == "CREDIT":
+            return "card_refund"
+        return "income" if direction == "CREDIT" else "expense"
+    if category_key == normalize("Transferência interna"):
         return "transfer"
-    if category == "Investimentos":
-        return "investment"
+    if category_key == normalize("Investimentos"):
+        return "investment" if direction == "DEBIT" else "income"
+    if category_key in (normalize("Salário"), normalize("Outras entradas")):
+        return "income" if direction == "CREDIT" else "expense"
     return "expense" if direction == "DEBIT" else "income"
+
+
+def _is_card_payment(description: str, source_category: str, operation_type: str = "") -> bool:
+    operation = str(operation_type or "").replace("_", " ").replace("-", " ")
+    text = normalize(f"{description} {source_category} {operation}".replace("_", " ").replace("-", " "))
+    if re.search(r"\b(?:pagamento|pagto|pgto|pgt|pagt)\b.{0,30}\b(?:fatura|fat|cartao)\b", text):
+        return True
+    phrases = (
+        "pagamento de fatura", "pagamento da fatura", "pagamento fatura",
+        "pagamento de cartao", "pagamento do cartao", "pagamento cartao",
+        "pagto de fatura", "pagto da fatura", "pagto fatura", "pagto de cartao", "pagto cartao",
+        "pgto de fatura", "pgto da fatura", "pgto fatura", "pgto de cartao", "pgto cartao",
+        "pgt fatura", "pgt cartao", "pagt fatura", "pagt cartao",
+        "fatura cartao", "fatura do cartao", "fatura de cartao",
+        "credit card payment", "payment of card", "card payment", "card bill",
+    )
+    return any(phrase in text for phrase in phrases)
+
+
+def _is_credit_account(tx: dict) -> bool:
+    return str(tx.get("account_type") or "BANK").strip().upper() == "CREDIT"
+
+
+def _confirmed_transactions(txs: list[dict]) -> list[dict]:
+    return [tx for tx in txs if str(tx.get("status") or "").strip().upper() not in ("PENDING", "PENDENTE")]
+
+
+def _eligible_transactions(txs: list[dict], through: date | None = None) -> list[dict]:
+    confirmed = _confirmed_transactions(txs)
+    if through:
+        cutoff = through.isoformat()
+        eligible = []
+        for tx in confirmed:
+            try:
+                if date.fromisoformat(str(tx.get("date") or "")[:10]) <= through:
+                    eligible.append(tx)
+            except ValueError:
+                continue
+        confirmed = eligible
+    return confirmed
+
+
+def transaction_totals(txs: list[dict], through: date | None = None) -> dict:
+    confirmed = _eligible_transactions(txs, through)
+    income = sum(tx["amount"] for tx in confirmed if tx["flow"] == "income" and not _is_credit_account(tx))
+    cash_expenses = sum(tx["amount"] for tx in confirmed
+                        if tx["flow"] == "expense" and not _is_credit_account(tx))
+    card_payments = sum(tx["amount"] for tx in confirmed
+                        if tx["flow"] == "card_payment" and not _is_credit_account(tx))
+    credit_purchases = sum(tx["amount"] for tx in confirmed
+                           if tx["flow"] == "expense" and _is_credit_account(tx))
+    card_refunds = sum(tx["amount"] for tx in confirmed if tx["flow"] == "card_refund")
+    consumption_expenses = sum(tx["amount"] for tx in confirmed if tx["flow"] == "expense") - card_refunds
+    investment_outflow = sum(tx["amount"] for tx in confirmed if tx["flow"] == "investment")
+    cash_outflow = cash_expenses + card_payments
+    return {"income": round(income, 2), "cash_expenses": round(cash_expenses, 2),
+            "card_payments": round(card_payments, 2), "cash_outflow": round(cash_outflow, 2),
+            "expenses": round(cash_outflow, 2), "consumption_expenses": round(consumption_expenses, 2),
+            "credit_purchases": round(credit_purchases, 2), "card_refunds": round(card_refunds, 2),
+            "invested_outflow": round(investment_outflow, 2),
+            "net": round(income - cash_outflow - investment_outflow, 2)}
+
+
+def category_spending_totals(txs: list[dict], through: date | None = None) -> dict[str, float]:
+    totals: dict[str, float] = {}
+    for tx in _eligible_transactions(txs, through):
+        if tx["flow"] == "expense":
+            totals[tx["category"]] = totals.get(tx["category"], 0.0) + tx["amount"]
+        elif tx["flow"] == "card_refund":
+            category = CARD_REFUND_CATEGORY
+            totals[category] = totals.get(category, 0.0) - tx["amount"]
+    return {name: round(amount, 2) for name, amount in totals.items() if amount}
 
 
 def classify_transaction(description: str, source_category: str, direction: str,
                           account_type: str, operation_type: str = "") -> tuple[str, str]:
-    text = normalize(f"{description} {operation_type}")
+    direction = str(direction or "").upper()
+    account_type = str(account_type or "BANK").upper()
+    text = normalize(f"{description} {operation_type}".replace("_", " ").replace("-", " "))
     source = normalize(source_category)
-    if "pagamento_fatura" in text or any(x in text for x in ("pagamento de fatura", "pagamento fatura", "pagamento cartao", "payment of card", "credit card payment")):
-        return "Pagamento de cartão", "transfer"
+    if _is_card_payment(description, source_category, operation_type):
+        if account_type == "CREDIT":
+            return CARD_PAYMENT_CATEGORY, "transfer"
+        return ("Outras entradas", "income") if direction == "CREDIT" else (CARD_PAYMENT_CATEGORY, "card_payment")
     if any(x in text for x in ("transferencia entre contas", "transferencia propria", "transferencia interna", "entre minhas contas")):
         return "Transferência interna", "transfer"
+    if account_type == "CREDIT" and direction == "CREDIT":
+        return CARD_REFUND_CATEGORY, "card_refund"
     if direction == "CREDIT":
         if any(x in text for x in ("salario", "folha de pagamento", "payroll", "pro labore")):
             return "Salário", "income"
@@ -712,18 +830,14 @@ def records(query: str, params: tuple = ()) -> list[dict]:
 
 def get_report_metrics(start: date, end: date) -> dict:
     with database() as db:
-        txs = [dict(row) for row in db.execute("SELECT * FROM transactions WHERE substr(date,1,10)>=? AND substr(date,1,10)<=? ORDER BY date",
+        txs = [dict(row) for row in db.execute("SELECT * FROM transactions WHERE substr(date,1,10)>=? AND substr(date,1,10)<=? "
+                                               "AND upper(coalesce(status,'')) NOT IN ('PENDING','PENDENTE') ORDER BY date",
                                                (start.isoformat(), end.isoformat())).fetchall()]
         investments = [dict(row) for row in db.execute("SELECT * FROM investments ORDER BY amount DESC").fetchall()]
-    income = sum(t["amount"] for t in txs if t["flow"] == "income")
-    expense = sum(t["amount"] for t in txs if t["flow"] == "expense")
-    investment_outflow = sum(t["amount"] for t in txs if t["flow"] == "investment")
-    categories: dict[str, float] = {}
-    for tx in txs:
-        if tx["flow"] == "expense":
-            categories[tx["category"]] = categories.get(tx["category"], 0.0) + tx["amount"]
-    return {"transactions": txs, "investments": investments, "income": income, "expense": expense,
-            "investment_outflow": investment_outflow, "net": income-expense-investment_outflow,
+    totals = transaction_totals(txs)
+    categories = category_spending_totals(txs, end)
+    return {"transactions": txs, "investments": investments, **totals,
+            "expense": totals["consumption_expenses"], "investment_outflow": totals["invested_outflow"],
             "categories": dict(sorted(categories.items(), key=lambda item: item[1], reverse=True))}
 
 
@@ -735,7 +849,11 @@ def brl(value: float) -> str:
 
 def weekly_analysis(metrics: dict) -> str:
     with database() as db:
-        all_txs = [dict(row) for row in db.execute("SELECT date,description,amount,direction,flow,category,institution,account_name,account_type,status FROM transactions ORDER BY date DESC").fetchall()]
+        all_txs = [dict(row) for row in db.execute(
+            "SELECT date,description,amount,direction,flow,category,institution,account_name,account_type,status "
+            "FROM transactions WHERE upper(coalesce(status,'')) NOT IN ('PENDING','PENDENTE') "
+            "AND substr(date,1,10)<=? ORDER BY date DESC", (local_now().date().isoformat(),)
+        ).fetchall()]
     portfolio = []
     for investment in metrics["investments"]:
         try:
@@ -753,15 +871,24 @@ def weekly_analysis(metrics: dict) -> str:
         })
     data = {
         "periodo_analisado": {"inicio": (local_now().date()-timedelta(days=6)).isoformat(), "fim": local_now().date().isoformat()},
-        "resumo_periodo": {"entradas_brl": round(metrics["income"], 2), "despesas_de_consumo_brl": round(metrics["expense"], 2),
-                           "aportes_importados_brl": round(metrics["investment_outflow"], 2), "saldo_brl": round(metrics["net"], 2),
+        "resumo_periodo": {"entradas_brl": round(metrics["income"], 2),
+                           "gastos_de_consumo_brl": round(metrics["expense"], 2),
+                           "saidas_de_caixa_brl": round(metrics["cash_outflow"], 2),
+                           "pagamentos_de_fatura_brl": round(metrics["card_payments"], 2),
+                           "compras_no_credito_brl": round(metrics["credit_purchases"], 2),
+                           "estornos_no_credito_brl": round(metrics["card_refunds"], 2),
+                           "aportes_importados_brl": round(metrics["investment_outflow"], 2),
+                           "saldo_de_caixa_brl": round(metrics["net"], 2),
                            "despesas_por_categoria_brl": {k: round(v, 2) for k,v in metrics["categories"].items()}},
         "historico_completo_de_movimentacoes": all_txs,
         "carteira_de_investimentos": portfolio,
     }
     prompt = (
         "Analise o JSON enviado em <stdin> como um assistente de financas pessoais. Use somente os dados fornecidos; "
-        "nao acesse arquivos, nao execute comandos e nao tente conectar a servicos. Avalie entradas e gastos, identifique "
+        "nao acesse arquivos, nao execute comandos e nao tente conectar a servicos. Diferencie gastos de consumo, "
+        "compras no credito, saidas de caixa e pagamentos de fatura: uma compra no credito entra como gasto na data da compra, "
+        "mas so reduz o caixa quando a fatura e paga. O pagamento da fatura nao e uma segunda despesa de consumo. Avalie "
+        "entradas e gastos, identifique "
         "as categorias e comerciantes que mais pesam, mudancas que merecem atencao, assinaturas ou padroes recorrentes "
         "quando houver evidencia suficiente, e sugira de 3 a 5 acoes concretas para economizar. Considere a carteira "
         "manual e a carteira sincronizada pelo Pluggy como patrimonio, diferencie a origem e os tipos de investimento, "
@@ -809,13 +936,18 @@ def report_text(kind: str, start: date, end: date, analysis: str = "") -> tuple[
     metrics = get_report_metrics(start, end)
     title = "Resumo diário" if kind == "daily" else "Resumo semanal"
     lines = [f"*{title} · {start.strftime('%d/%m')} a {end.strftime('%d/%m')}*",
-             f"Entradas: {brl(metrics['income'])}", f"Despesas: {brl(metrics['expense'])}"]
+             f"Entradas: {brl(metrics['income'])}",
+             f"Gastos de consumo (inclui compras no crédito): {brl(metrics['expense'])}",
+             f"Saídas de caixa: {brl(metrics['cash_outflow'])}"]
+    if metrics["card_payments"]:
+        lines.append(f"Pagamentos de fatura: {brl(metrics['card_payments'])}")
     if metrics["investment_outflow"]:
         lines.append(f"Aportes identificados no extrato: {brl(metrics['investment_outflow'])}")
-    lines.append(f"Saldo do período: {brl(metrics['net'])}")
+    lines.append(f"Saldo de caixa do período: {brl(metrics['net'])}")
     if metrics["categories"]:
-        top = list(metrics["categories"].items())[:3]
-        lines.append("Maiores categorias: " + " · ".join(f"{name} {brl(amount)}" for name, amount in top))
+        top = [(name, amount) for name, amount in metrics["categories"].items() if amount > 0][:3]
+        if top:
+            lines.append("Maiores categorias: " + " · ".join(f"{name} {brl(amount)}" for name, amount in top))
     if analysis:
         lines += ["", "*Análise GPT-6 Luna Max*", analysis]
     lines.append("Carteira de investimentos (Pluggy + manual): " + brl(sum(i["amount"] for i in metrics["investments"])))
@@ -1095,23 +1227,26 @@ def api_summary():
         bills = [dict(r) for r in db.execute("SELECT b.*,a.name AS account_name,a.institution FROM bills b JOIN accounts a ON a.account_id=b.account_id ORDER BY b.due_date DESC LIMIT 12").fetchall()]
         investments = [dict(r) for r in db.execute("SELECT * FROM investments ORDER BY amount DESC").fetchall()]
         recent = [dict(r) for r in db.execute("SELECT * FROM transactions ORDER BY julianday(date) DESC, date DESC, updated_at DESC LIMIT 80").fetchall()]
-        chart_txs = [dict(r) for r in db.execute("SELECT date,amount,flow FROM transactions WHERE substr(date,1,10)>=? AND substr(date,1,10)<=? AND upper(coalesce(status,'')) NOT IN ('PENDING','PENDENTE') ORDER BY date",
+        chart_txs = [dict(r) for r in db.execute("SELECT date,amount,flow,account_type FROM transactions WHERE substr(date,1,10)>=? AND substr(date,1,10)<=? AND upper(coalesce(status,'')) NOT IN ('PENDING','PENDENTE') ORDER BY date",
                                                   ((today-timedelta(days=29)).isoformat(), today.isoformat())).fetchall()]
         connected = [dict(r) for r in db.execute("SELECT * FROM items ORDER BY created_at DESC").fetchall()]
-    income = sum(t["amount"] for t in txs if t["flow"] == "income")
-    expenses = sum(t["amount"] for t in txs if t["flow"] == "expense")
-    invested = sum(t["amount"] for t in txs if t["flow"] == "investment")
-    category_totals: dict[str,float] = {}
-    for tx in txs:
-        if tx["flow"] == "expense":
-            category_totals[tx["category"]] = category_totals.get(tx["category"],0) + tx["amount"]
-    categories = [{"name":k,"amount":round(v,2)} for k,v in sorted(category_totals.items(),key=lambda x:x[1],reverse=True)]
+    totals = transaction_totals(txs)
+    categories = [{"name": name, "amount": amount}
+                  for name, amount in sorted(category_spending_totals(txs, today).items(), key=lambda item: item[1], reverse=True)]
     days = [(today-timedelta(days=n)) for n in range(29,-1,-1)]
     daily = {d.isoformat(): {"income":0.0,"expense":0.0,"investment":0.0} for d in days}
     for tx in chart_txs:
         tx_day = (tx["date"] or "")[:10]
-        if tx_day in daily and tx["flow"] in ("income","expense","investment"):
-            daily[tx_day][tx["flow"]] += tx["amount"]
+        if tx_day not in daily:
+            continue
+        flow = tx["flow"]
+        is_credit = str(tx.get("account_type") or "BANK").upper() == "CREDIT"
+        if flow == "income" and not is_credit:
+            daily[tx_day]["income"] += tx["amount"]
+        elif not is_credit and flow in ("expense", "card_payment"):
+            daily[tx_day]["expense"] += tx["amount"]
+        elif flow == "investment":
+            daily[tx_day]["investment"] += tx["amount"]
     flow_data=[]
     cumulative=0.0
     for d in days:
@@ -1122,10 +1257,17 @@ def api_summary():
                           "investment":round(row["investment"],2),"net":round(net,2),"cumulative":round(cumulative,2)})
     card_rows = [a for a in accounts if a["type"] == "CREDIT"]
     for card in card_rows:
-        card["month_spend"] = round(sum(t["amount"] for t in txs if t["account_id"]==card["account_id"] and t["flow"]=="expense"),2)
+        card_txs = [tx for tx in txs if tx["account_id"] == card["account_id"]]
+        card["month_spend"] = round(
+            sum(tx["amount"] for tx in card_txs if tx["flow"] == "expense")
+            - sum(tx["amount"] for tx in card_txs if tx["flow"] == "card_refund"), 2
+        )
         card["latest_bill"] = next((b for b in bills if b["account_id"]==card["account_id"]),None)
-    return jsonify({"today":today.isoformat(),"month_label":today.strftime("%B %Y"),"income":round(income,2),
-                    "expenses":round(expenses,2),"invested_outflow":round(invested,2),"net":round(income-expenses-invested,2),
+    return jsonify({"today":today.isoformat(),"month_label":today.strftime("%B %Y"),"income":totals["income"],
+                    "expenses":totals["cash_outflow"], "cash_outflow":totals["cash_outflow"],
+                    "consumption_expenses":totals["consumption_expenses"], "card_payments":totals["card_payments"],
+                    "credit_purchases":totals["credit_purchases"], "card_refunds":totals["card_refunds"],
+                    "invested_outflow":totals["invested_outflow"],"net":totals["net"],
                     "investment_total":round(sum(i["amount"] for i in investments),2),"categories":categories,
                     "flow":flow_data,"transactions":recent,"accounts":accounts,"cards":card_rows,"bills":bills,
                     "investments":investments,"items":connected,"last_sync":get_setting("last_sync",""),
@@ -1157,13 +1299,8 @@ def api_transactions():
         txs = [dict(row) for row in db.execute(
             "SELECT * FROM transactions" + where + " ORDER BY julianday(date) DESC, date DESC, updated_at DESC",
             tuple(params)).fetchall()]
-    confirmed = [tx for tx in txs if str(tx.get("status") or "").strip().upper() not in ("PENDING", "PENDENTE")]
-    income = sum(tx["amount"] for tx in confirmed if tx["flow"] == "income")
-    expenses = sum(tx["amount"] for tx in confirmed if tx["flow"] == "expense")
-    invested = sum(tx["amount"] for tx in confirmed if tx["flow"] == "investment")
-    return jsonify(transactions=txs, count=len(txs), totals={"income": round(income, 2),
-                    "expenses": round(expenses, 2), "invested_outflow": round(invested, 2),
-                    "net": round(income-expenses-invested, 2)})
+    totals = transaction_totals(txs, local_now().date())
+    return jsonify(transactions=txs, count=len(txs), totals=totals)
 
 
 def _forecast_description_key(value: str) -> str:
@@ -1602,10 +1739,10 @@ def api_update_transaction(transaction_id: str):
     if category not in CATEGORIES:
         return jsonify(error="Categoria inválida."),400
     with database() as db:
-        row=db.execute("SELECT direction FROM transactions WHERE transaction_id=?",(transaction_id,)).fetchone()
+        row=db.execute("SELECT direction,account_type FROM transactions WHERE transaction_id=?",(transaction_id,)).fetchone()
         if not row:
             return jsonify(error="Movimentação não encontrada."),404
-        flow=category_flow(category,row["direction"])
+        flow=category_flow(category,row["direction"],row["account_type"])
         db.execute("UPDATE transactions SET category=?,category_source='manual',flow=? WHERE transaction_id=?",
                    (category,flow,transaction_id))
     return jsonify(ok=True)

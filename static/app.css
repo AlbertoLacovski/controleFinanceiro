@@ -200,7 +200,7 @@ a { color: inherit; text-decoration: none; }
 .period-summary { margin:0 0 13px; padding:15px 17px 12px; border:1px solid #e6eeeb; border-radius:12px; background:linear-gradient(120deg,#fff,#f8fbfa); }
 .period-summary-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; color:#7a8c92; font-size:9px; }
 .period-summary-heading .eyebrow { margin:0; }
-.period-total-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }
+.period-total-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:9px; }
 .period-total { display:grid; gap:5px; min-width:0; padding:9px 11px; border:1px solid #edf2f0; border-radius:9px; background:#fff; }
 .period-total span { color:#809097; font-size:9px; }
 .period-total strong { color:#284957; font:700 15px var(--display); letter-spacing:-.2px; white-space:nowrap; }

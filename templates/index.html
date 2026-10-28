@@ -69,8 +69,8 @@
             <div class="stat-value" id="statIncome">R$ 0,00</div><div class="stat-foot"><span class="foot-dot green"></span> Entradas confirmadas no mês</div>
           </article>
           <article class="stat-card">
-            <div class="stat-heading"><span>Despesas no mês</span><span class="stat-icon icon-coral">↗</span></div>
-            <div class="stat-value" id="statExpenses">R$ 0,00</div><div class="stat-foot"><span class="foot-dot coral"></span> Despesas confirmadas no mês</div>
+            <div class="stat-heading"><span>Saídas de caixa no mês</span><span class="stat-icon icon-coral">↗</span></div>
+            <div class="stat-value" id="statExpenses">R$ 0,00</div><div class="stat-foot"><span class="foot-dot coral"></span> Débitos e faturas pagas; crédito só sai ao pagar</div>
           </article>
           <article class="stat-card stat-featured">
             <div class="stat-heading"><span>Saldo do mês</span><span class="stat-icon icon-blue">∑</span></div>
@@ -85,13 +85,13 @@
         <div class="content-grid overview-grid">
           <article class="panel chart-panel">
             <div class="panel-heading">
-              <div><p class="eyebrow">MOVIMENTO DO DINHEIRO</p><h2>Fluxo de caixa</h2><p class="panel-subtitle">Últimos 30 dias · valores em reais</p></div>
+              <div><p class="eyebrow">MOVIMENTO DO DINHEIRO</p><h2>Fluxo de caixa</h2><p class="panel-subtitle">Últimos 30 dias · compras no crédito saem do caixa ao pagar a fatura</p></div>
               <span class="chart-period">30 dias <span aria-hidden="true">⌄</span></span>
             </div>
-            <div id="cashflowChart" class="chart" role="group" aria-label="Gráfico interativo de entradas, despesas e aportes nos últimos 30 dias">
+            <div id="cashflowChart" class="chart" role="group" aria-label="Gráfico interativo de entradas, saídas de caixa e aportes nos últimos 30 dias">
               <div class="chart-placeholder"><span class="loader"></span> Preparando o gráfico</div>
             </div>
-            <div class="chart-legend" aria-label="Exibir ou ocultar séries do gráfico"><button type="button" class="chart-legend-toggle" data-series-toggle="income" aria-pressed="true"><i class="legend-dot legend-income"></i>Entradas</button><button type="button" class="chart-legend-toggle" data-series-toggle="expense" aria-pressed="true"><i class="legend-dot legend-expense"></i>Despesas</button><button type="button" class="chart-legend-toggle" data-series-toggle="investment" aria-pressed="true"><i class="legend-dot legend-invest"></i>Aportes</button></div>
+            <div class="chart-legend" aria-label="Exibir ou ocultar séries do gráfico"><button type="button" class="chart-legend-toggle" data-series-toggle="income" aria-pressed="true"><i class="legend-dot legend-income"></i>Entradas</button><button type="button" class="chart-legend-toggle" data-series-toggle="expense" aria-pressed="true"><i class="legend-dot legend-expense"></i>Saídas de caixa</button><button type="button" class="chart-legend-toggle" data-series-toggle="investment" aria-pressed="true"><i class="legend-dot legend-invest"></i>Aportes</button></div>
           </article>
           <article class="panel categories-panel">
             <div class="panel-heading"><div><p class="eyebrow">SEU MÊS</p><h2>Onde você gastou</h2></div><button class="text-button" data-nav="transactions">Ver tudo <span aria-hidden="true">→</span></button></div>
@@ -159,16 +159,17 @@
             <span aria-hidden="true">até</span>
             <input class="date-filter" id="transactionEndDate" type="date" aria-label="Data final">
           </div>
-          <select class="select-control" id="flowFilter" aria-label="Filtrar por tipo"><option value="all">Todos os movimentos</option><option value="income">Entradas</option><option value="expense">Despesas</option><option value="investment">Aportes</option><option value="transfer">Transferências e faturas</option></select>
+          <select class="select-control" id="flowFilter" aria-label="Filtrar por tipo"><option value="all">Todos os movimentos</option><option value="income">Entradas</option><option value="expense">Despesas e compras</option><option value="card_payment">Pagamentos de fatura</option><option value="card_refund">Estornos no cartão</option><option value="investment">Aportes</option><option value="transfer">Transferências internas</option></select>
         </div>
         <div class="period-summary" aria-live="polite">
           <div class="period-summary-heading"><p class="eyebrow">RESUMO DO PERÍODO</p><span id="transactionPeriodLabel">Todo o histórico</span></div>
           <div class="period-total-grid">
             <div class="period-total"><span>Entradas confirmadas</span><strong id="periodIncome">R$ 0,00</strong></div>
-            <div class="period-total"><span>Despesas confirmadas</span><strong id="periodExpenses">R$ 0,00</strong></div>
-            <div class="period-total"><span>Saldo após despesas e aportes</span><strong id="periodNet">R$ 0,00</strong></div>
+            <div class="period-total"><span>Saídas de caixa confirmadas</span><strong id="periodExpenses">R$ 0,00</strong></div>
+            <div class="period-total"><span>Gastos de consumo, inclui crédito</span><strong id="periodConsumption">R$ 0,00</strong></div>
+            <div class="period-total"><span>Saldo de caixa após saídas e aportes</span><strong id="periodNet">R$ 0,00</strong></div>
           </div>
-          <p class="period-note" id="transactionPeriodNote">Os totais consideram o período selecionado; lançamentos pendentes continuam no extrato, mas ficam fora das somas.</p>
+          <p class="period-note" id="transactionPeriodNote">Compras no crédito aparecem como gastos na data da compra, mas só reduzem o caixa quando a fatura é paga. Lançamentos pendentes ficam fora dos totais.</p>
         </div>
         <article class="panel table-panel">
           <div class="panel-heading"><div><p class="eyebrow">EXTRATO CONSOLIDADO</p><h2>Movimentações</h2><p class="panel-subtitle">Revise as categorias sugeridas e ajuste quando precisar.</p></div><span class="result-count" id="transactionCount">0 registros</span></div>
